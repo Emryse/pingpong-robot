@@ -1,6 +1,7 @@
 
 import pygame, sys
 import numpy as np
+import math
 from moviepy.video.tools.drawing import circle
 
 from pygame.math import Vector2
@@ -85,7 +86,7 @@ class Ball(BaseSprite):
     def step(self):
         self.init_x = self.hull.position.x
         self.init_y = self.hull.position.y
-        print('ball w=\t%s\t%s' % world_to_screen((self.init_x, self.init_y)))
+        #print('ball w=\t%s\t%s' % world_to_screen((self.init_x, self.init_y)))
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
         center = world_to_screen(Vector2(self.init_x, self.init_y) + Vector2(translation))
@@ -101,6 +102,8 @@ class Bat(BaseSprite):
         self.hull = self.world.CreateDynamicBody(
             position=(init_x, init_y),
             angle=init_angle,
+            angularDamping=5,
+            linearDamping=0.1,
             fixtures=[
                 b2FixtureDef(
                     shape=b2PolygonShape(
@@ -111,7 +114,7 @@ class Bat(BaseSprite):
                     friction=0.1  # 摩擦降低
                 )
             ])
-        self.hull.mass=0.1
+        self.hull.mass=1
 
     def act(self, action):
         """
@@ -121,17 +124,42 @@ class Bat(BaseSprite):
         """
         force = action[0]
         angle = action[1]
+        force = self.hull.GetWorldVector(localVector=(float(0), self.hull.mass * 9.81))
+        self.hull.ApplyForce(force, self.hull.worldCenter, True)
+        #self.hull.angle = float(math.radians(45))
+        self.hull.ApplyTorque(50, True)
 
-        self.angle = angle
+        # 给球拍施加扭矩，旋转角度，限制角度范围
+        """
+        current_angle = self.hull.angle
+        target_angle = math.radians(90)  # 目标角度转弧度
+        angle_diff = target_angle - current_angle
+        # 规范角度差到[-π, π]
+        angle_diff = (angle_diff + math.pi) % (2 * math.pi) - math.pi
+
+        torque_strength = 100.0  # 扭矩强度系数
+        torque = angle_diff * torque_strength
+        self.hull.ApplyTorque(torque, wake=True)  # 施加扭矩‌:ml-citation{ref="2" data="citationList"}
+
+        angular_damping = 0.5  # 阻尼系数(0-1)
+        self.hull.angularVelocity *= (1 - angular_damping)
+
+        # 角速度限制实现
+        max_angular_speed = 5.0  # 最大5弧度/秒
+        if abs(self.hull.angularVelocity) > max_angular_speed:
+            self.hull.angularVelocity = math.copysign(max_angular_speed, self.hull.angularVelocity)
+        
+        """
 
     def step(self):
         self.init_x = self.hull.position.x
         self.init_y = self.hull.position.y
-        print('bat w=\t%s\t%s' % world_to_screen((self.init_x, self.init_y)))
+        pos = world_to_screen((self.init_x, self.init_y))
+        print('bat w=\t%s\t%s    angel=\t角度:%s\t角速度:%s' % (pos[0], pos[1],  self.hull.angle, self.hull.angularVelocity))
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
         points =  [
-            Vector2(Vector2(c) + Vector2(self.hull.position)).rotate(self.hull.angle) + Vector2(translation) for c in self.BAT_POLY
+            Vector2(c).rotate(math.degrees(self.hull.angle)) + Vector2(self.hull.position) + Vector2(translation) for c in self.BAT_POLY
         ]
         pygame.draw.polygon(surface, color=(255, 255, 255), points=world_to_screen(points))
 

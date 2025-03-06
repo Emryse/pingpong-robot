@@ -4,11 +4,11 @@ from pygame.math import Vector2
 from Box2D import (b2Vec2)
 
 # 像素/米（4K优化）
-PPM = 100
+PPM = 200
 # 球桌宽高m
 TABLE_W, TABLE_H = 1.525, 2.74
 # 场地尺寸
-COURT_W, COURT_H = TABLE_W + 3, TABLE_H + 3
+COURT_W, COURT_H = TABLE_W + 1, TABLE_H + 1.6
 # 屏幕显示
 SCREEN_W, SCREEN_H = COURT_W * PPM, COURT_H * PPM
 

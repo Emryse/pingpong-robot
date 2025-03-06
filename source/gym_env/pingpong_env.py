@@ -45,8 +45,8 @@ class PingPongEnv(gym.Env):
     """
     FPS = 50
 
-    # 球拍上施加的最大力 N/m
-    bat_force_max = 100
+    # 球拍上施加的最大力 N
+    bat_force_max = 5
     # 球拍最大转动角度
     bat_angle_max = 90
 
@@ -78,7 +78,7 @@ class PingPongEnv(gym.Env):
             )
         )
         self.wall.mass = 10
-        self.ball = Ball(self.world, init_x=COURT_W/2, init_y=TABLE_H)
+        self.ball = Ball(self.world, init_x=COURT_W/2, init_y=COURT_H)
         self.bat = Bat(self.world, init_x=COURT_W/2, init_y=(COURT_H - TABLE_H)/2)
 
         act_space_high = np.array(
@@ -154,7 +154,7 @@ class PingPongEnv(gym.Env):
         #self.surf = pygame.transform.flip(self.surf, False, True)
 
         font = pygame.font.Font(pygame.font.get_default_font(), 26)
-        text = font.render("Text %04i" % 100, True, (255, 255, 255), (0, 0, 0))
+        text = font.render("pingpong-v0", True, (255, 255, 255), (0, 0, 0))
         text_rect = text.get_rect()
         text_rect.bottomleft = (15, text_rect.height + 15)
         self.surf.blit(text, text_rect)
