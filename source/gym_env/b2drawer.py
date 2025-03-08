@@ -37,7 +37,7 @@ class B2Drawer:
         pygame.draw.circle(screen, (0,255,0), screen_center, int(radius_px), width=2)
 
     @staticmethod
-    def __draw_edge(self, body, screen:SurfaceType, shape):
+    def __draw_edge(body, screen:SurfaceType, shape):
         v1 = body.transform * shape.vertices  # 起点世界坐标
         v2 = body.transform * shape.vertices  # 终点世界坐标
         p1 = world_to_screen(v1)

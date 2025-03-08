@@ -97,10 +97,13 @@ class Bat(BaseSprite):
     """
     标准球拍尺寸 158*152mm 厚度15mm 约80-100g
     """
+    # 球拍外轮廓
     BAT_POLY = [(-0.079, -0.0075), (0.079, -0.0075), (0.079, 0.0075), (-0.079, 0.0075)]
+
     def __init__(self, world, init_x=0, init_y=0, init_angle:np.float32=0):
         BaseSprite.__init__(self, world, init_x, init_y, init_angle)
-        self.hull = self.world.CreateDynamicBody(
+        # 球拍 Box2D动态刚体
+        self.body = self.world.CreateDynamicBody(
             position=(init_x, init_y),
             angle=init_angle,
             angularDamping=10,
@@ -117,7 +120,7 @@ class Bat(BaseSprite):
                 )
             ])
         # 球拍质量约200g
-        self.hull.mass=0.2
+        self.body.mass=0.2
         #self.hull.fixedRotation = False
 
         # 创建y轴关节，只允许x轴移动
@@ -131,7 +134,7 @@ class Bat(BaseSprite):
             fixture.sensor = True # 设置为感应器，不发生物理碰撞
 
         self.anchor_body = anchor_body
-        target_body = self.hull
+        target_body = self.body
         # 此处用wheel关节，限制为x移动，可以旋转。不能使用棱柱关节b2PrismaticJointDef，不能转动
         joint_def = b2WheelJointDef()
         joint_def.Initialize(anchor_body, target_body, anchor_body.worldCenter, (1, 0))  # 滑动轴为 X 轴
@@ -146,6 +149,9 @@ class Bat(BaseSprite):
 
         world.CreateJoint(joint_def)
 
+        # 球拍扭矩和转动 PID控制参数（根据刚体质量调试）
+        self.pid = PIDController(kp=0.01, ki=2, kd=0.00008)
+
     def act(self, action):
         """
         球拍动作
@@ -153,26 +159,26 @@ class Bat(BaseSprite):
         :return:
         """
         force = action[0]
-        angle = 60 #action[1]
+        angle = action[1]
         force = (float(force), 0) #self.hull.GetWorldVector((float(force), 0))
-        self.hull.ApplyForce(force, self.hull.worldCenter, True)
+        self.body.ApplyForce(force, self.body.worldCenter, True)
 
         # 用2pi取模
-        angle_diff = (math.radians(angle) - self.hull.angle) % (2 * math.pi)
+        angle_diff = (math.radians(angle) - self.body.angle) % (2 * math.pi)
         # 限制在 [-pi ,pi] 之间
         angle_diff = angle_diff - 2 * math.pi if angle_diff > math.pi else angle_diff
-        torque = pid.compute(angle_diff, 1.0 / FPS)
-        self.hull.ApplyTorque(torque, True)
+        torque = self.pid.compute(angle_diff, 1.0 / FPS)
+        self.body.ApplyTorque(torque, True)
 
         # 角速度限制实现
         max_angular_speed = 0.1
-        if abs(self.hull.angularVelocity) > max_angular_speed:
-            self.hull.angularVelocity = math.copysign(max_angular_speed, self.hull.angularVelocity)
+        if abs(self.body.angularVelocity) > max_angular_speed:
+            self.body.angularVelocity = math.copysign(max_angular_speed, self.body.angularVelocity)
 
-        print('bat.act \t center: %s, \t force: %s \t angle: %s \t angle_diff: %s \t torque: %s' % (self.hull.worldCenter, force, angle, angle_diff, torque))
+        print('bat.act \t center: %s, \t force: %s \t angle: %s \t angle_diff: %s \t torque: %s' % (self.body.worldCenter, force, angle, angle_diff, torque))
 
         # 给球拍施加扭矩，旋转角度，限制角度范围
-        """current_angle = self.hull.angle
+        """current_angle = self.body.angle
         target_angle = math.radians(angle)  # 目标角度转弧度
         angle_diff = target_angle - current_angle
         # 规范角度差到[-π, π]
@@ -180,34 +186,37 @@ class Bat(BaseSprite):
 
         torque_strength = 100.0  # 扭矩强度系数
         torque = angle_diff * torque_strength
-        self.hull.ApplyTorque(torque, wake=True)  # 施加扭矩‌:ml-citation{ref="2" data="citationList"}
+        self.body.ApplyTorque(torque, wake=True)  # 施加扭矩‌:ml-citation{ref="2" data="citationList"}
 
         angular_damping = 0.5  # 阻尼系数(0-1)
-        self.hull.angularVelocity *= (1 - angular_damping)
+        self.body.angularVelocity *= (1 - angular_damping)
 
         # 角速度限制实现
         max_angular_speed = 5.0  # 最大5弧度/秒
-        if abs(self.hull.angularVelocity) > max_angular_speed:
-            self.hull.angularVelocity = math.copysign(max_angular_speed, self.hull.angularVelocity)
+        if abs(self.body.angularVelocity) > max_angular_speed:
+            self.body.angularVelocity = math.copysign(max_angular_speed, self.body.angularVelocity)
         """
 
     def step(self):
-        self.init_x = self.hull.position.x
-        self.init_y = self.hull.position.y
+        self.init_x = self.body.position.x
+        self.init_y = self.body.position.y
         pos = world_to_screen((self.init_x, self.init_y))
-        #print('bat w=\t%s\t%s    angel=\t角度:%s\t角速度:%s' % (pos[0], pos[1],  self.hull.angle, self.hull.angularVelocity))
+        #print('bat w=\t%s\t%s    angel=\t角度:%s\t角速度:%s' % (pos[0], pos[1],  self.body.angle, self.hull.angularVelocity))
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
         """
         points =  [
-            Vector2(c).rotate(math.degrees(self.hull.angle)) + Vector2(self.hull.position) + Vector2(translation) for c in self.BAT_POLY
+            Vector2(c).rotate(math.degrees(self.body.angle)) + Vector2(self.hull.position) + Vector2(translation) for c in self.BAT_POLY
         ]
         pygame.draw.polygon(surface, color=(255, 255, 255), points=world_to_screen(points))
         """
         B2Drawer.draw_body(self.anchor_body, surface)
-        B2Drawer.draw_body(self.hull, surface)
+        B2Drawer.draw_body(self.body, surface)
 
 class PIDController:
+    """
+    PID控制器
+    """
     def __init__(self, kp, ki, kd):
         self.kp, self.ki, self.kd = kp, ki, kd
         self.last_error = self.integral = 0
@@ -218,8 +227,5 @@ class PIDController:
         output = self.kp * error + self.ki * self.integral + self.kd * derivative
         self.last_error = error
         return output
-
-# 初始化 PID 参数（根据刚体质量调试）
-pid = PIDController(kp=0.1, ki=0, kd=0)
 
 __all__ = ['Ball', 'Bat']

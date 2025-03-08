@@ -11,6 +11,8 @@ import mujoco
 import pygame
 from networkx.algorithms.bipartite.basic import color, density
 from pygame import gfxdraw
+
+from gym_env.b2drawer import B2Drawer
 from gym_env.utils import world_to_screen, screen_to_world, FPS, PPM, TABLE_W, TABLE_H, COURT_W, COURT_H, SCREEN_W, SCREEN_H
 
 import Box2D
@@ -18,7 +20,7 @@ from Box2D  import b2LoopShape, b2PolygonShape, b2EdgeShape, b2Vec2, b2ContactLi
 from gym_env.pygame_spirite import Ball, Bat
 
 # 场地范围
-WALL_POLY = [(0, 0), (COURT_W, 0), (COURT_W, COURT_H), (0, COURT_H)]
+COURT_POLY = [(0, 0), (COURT_W, 0), (COURT_W, COURT_H), (0, COURT_H)]
 
 class FrictionDetector(b2ContactListener):
     def __init__(self, env):
@@ -62,23 +64,40 @@ class PingPongEnv(gym.Env):
         self.world = Box2D.b2World((0.0, -9.81), contactListener=self.contactListener_keepref)
         self.screen = None
         self.clock = None
-        self.isopen = True
+        self.is_open = True
 
-        # The wall
-        self.wall = self.world.CreateBody(
+        # 定义场地， v0版本为垂直抛球接球
+        self.court = self.world.CreateBody(
             position=(0, 0),
-            shapes=[b2EdgeShape(vertices=WALL_POLY[0:2]), b2EdgeShape(vertices=WALL_POLY[1:3]), b2EdgeShape(vertices=WALL_POLY[2:]), b2EdgeShape(vertices=[WALL_POLY[-1],WALL_POLY[-0]])],
+            shapes=[b2EdgeShape(vertices=COURT_POLY[0:2]),
+                    b2EdgeShape(vertices=COURT_POLY[1:3]),
+                    b2EdgeShape(vertices=COURT_POLY[2:]),
+                    b2EdgeShape(vertices=[COURT_POLY[-1], COURT_POLY[-0]])],
             #shapes=b2LoopShape(vertices=WALL_POLY),
             shapeFixture=b2FixtureDef(
-                density=1.0,
+                density=10.0,
                 restitution=0.9,  # 反弹系数（0~1）
                 friction=0.1  # 降低摩擦增强反弹效果
-            )
+            ),
+            userData = "court",
         )
-        self.wall.mass = 10
+
+        # 定义球桌，v0版本为垂直抛球接球，不需要球桌
+        self.table = self.world.CreateStaticBody(
+            position=(COURT_W/ 2, COURT_H/ 2),
+            shapes=b2PolygonShape(box=(TABLE_W/2, TABLE_H/2)),
+            userData="table",
+        )
+        # 设置球桌为感应器类型，俯视外边界不发生物理碰撞
+        for fixture in self.table.fixtures:
+            fixture.sensor = True
+
+        # 定义乒乓球
         self.ball = Ball(self.world, init_x=COURT_W/2, init_y=COURT_H)
+        # 定义球拍
         self.bat = Bat(self.world, init_x=COURT_W/2, init_y=(COURT_H - TABLE_H)/2)
 
+        # 球拍动作参数空间
         act_space_high = np.array(
             [
                 self.bat_force_max,
@@ -88,6 +107,7 @@ class PingPongEnv(gym.Env):
         )
         self.action_space = spaces.Box(-act_space_high, act_space_high, dtype=np.float32)
 
+        # 环境状态参数空间
         obs_space_high = np.array(
             [
                 COURT_W / 2,
@@ -104,12 +124,13 @@ class PingPongEnv(gym.Env):
         options: Optional[dict] = None,
     ):
         super().reset()
-        self.t = 0.0
+        # 总运行时间
+        self.total_time = 0.0
 
     def step(self, action):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                self.isopen = False
+                self.is_open = False
             if event.type == pygame.MOUSEMOTION:  # 鼠标控制球拍
                 world_pos = screen_to_world(event.pos)
                 self.bat.position = b2Vec2(world_pos)  # Y轴固定高度
@@ -120,11 +141,11 @@ class PingPongEnv(gym.Env):
         self.ball.step()
         self.bat.step()
         self.world.Step(1.0 / FPS, 6 * 30, 2 * 30)
-        self.t += 1.0 / FPS
+        self.total_time += 1.0 / FPS
 
         #self.state = self.render("state_pixels")
 
-        return self.observation_space.sample(), 0, not self.isopen, {}
+        return self.observation_space.sample(), 0, not self.is_open, {}
 
     def seed(self, seed=None):
         super().seed(seed)
@@ -138,13 +159,16 @@ class PingPongEnv(gym.Env):
         if self.clock is None:
             self.clock = pygame.time.Clock()
 
-        if "t" not in self.__dict__:
+        if "total_time" not in self.__dict__:
             return
 
         self.surf = pygame.Surface((SCREEN_W, SCREEN_H))
-        # 场地
+        # 绘制场地
+        #B2Drawer.draw_body(self.court, self.surf)
         for i in range(4):
-            pygame.draw.polygon(self.surf, color=(100, 100, 100), points=world_to_screen(self.wall.fixtures[i].shape.vertices), width=20)
+            pygame.draw.polygon(self.surf, color=(100, 100, 100), points=world_to_screen(self.court.fixtures[i].shape.vertices), width=20)
+        # 绘制球桌，v0版本为垂直抛球接球，不需要球桌
+        B2Drawer.draw_body(self.table, self.surf)
 
         self.ball.draw(self.surf)
         self.bat.draw(self.surf)
@@ -168,6 +192,6 @@ class PingPongEnv(gym.Env):
         pygame.quit()
         if self.screen is not None:
             pygame.display.quit()
-            self.isopen = False
+            self.is_open = False
 
 __all__ = ['PingPongEnv']
