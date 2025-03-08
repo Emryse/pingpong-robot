@@ -3,6 +3,8 @@ import numpy as np
 from pygame.math import Vector2
 from Box2D import (b2Vec2)
 
+# 帧每秒
+FPS = 50
 # 像素/米（4K优化）
 PPM = 200
 # 球桌宽高m

@@ -1,0 +1,8 @@
+torch==2.2.2
+gym==0.23.1
+isaacsim==4.2.0.2
+mujoco==3.2.7
+mujoco-py==2.1.2.14
+numpy==1.26.4
+pygame==2.1.0
+Box2D==2.3.10

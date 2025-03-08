@@ -11,7 +11,7 @@ import mujoco
 import pygame
 from networkx.algorithms.bipartite.basic import color, density
 from pygame import gfxdraw
-from gym_env.utils import world_to_screen, screen_to_world, PPM, TABLE_W, TABLE_H, COURT_W, COURT_H, SCREEN_W, SCREEN_H
+from gym_env.utils import world_to_screen, screen_to_world, FPS, PPM, TABLE_W, TABLE_H, COURT_W, COURT_H, SCREEN_W, SCREEN_H
 
 import Box2D
 from Box2D  import b2LoopShape, b2PolygonShape, b2EdgeShape, b2Vec2, b2ContactListener, b2FixtureDef, b2PolygonShape
@@ -43,8 +43,6 @@ class PingPongEnv(gym.Env):
     | 2   | Ball Position Y      |
 
     """
-    FPS = 50
-
     # 球拍上施加的最大力 N
     bat_force_max = 5
     # 球拍最大转动角度
@@ -121,8 +119,8 @@ class PingPongEnv(gym.Env):
 
         self.ball.step()
         self.bat.step()
-        self.world.Step(1.0 / self.FPS, 6 * 30, 2 * 30)
-        self.t += 1.0 / self.FPS
+        self.world.Step(1.0 / FPS, 6 * 30, 2 * 30)
+        self.t += 1.0 / FPS
 
         #self.state = self.render("state_pixels")
 
@@ -145,7 +143,6 @@ class PingPongEnv(gym.Env):
 
         self.surf = pygame.Surface((SCREEN_W, SCREEN_H))
         # 场地
-        print(f'Court: {self.wall.position}')
         for i in range(4):
             pygame.draw.polygon(self.surf, color=(100, 100, 100), points=world_to_screen(self.wall.fixtures[i].shape.vertices), width=20)
 
