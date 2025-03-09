@@ -8,7 +8,7 @@ from pygame.math import Vector2
 from gym_env.b2drawer import B2Drawer
 
 import Box2D
-from Box2D import (b2Vec2, b2CircleShape, b2FixtureDef, b2LoopShape, b2PolygonShape,
+from Box2D import (b2Vec2, b2EdgeShape, b2CircleShape, b2FixtureDef, b2LoopShape, b2PolygonShape,
                    b2RevoluteJointDef, b2PrismaticJointDef, b2_pi, b2WheelJointDef)
 from gym_env.utils import world_to_screen, screen_to_world, FPS, PPM, COURT_W
 from pingpong import world
@@ -98,6 +98,8 @@ class Bat(BaseSprite):
     标准球拍尺寸 158*152mm 厚度15mm 约80-100g
     """
     # 球拍外轮廓
+    BAT_THICKNESS =  0.015
+    BAT_LENGTH =  0.158
     BAT_POLY = [(-0.079, -0.0075), (0.079, -0.0075), (0.079, 0.0075), (-0.079, 0.0075)]
 
     def __init__(self, world, init_x=0, init_y=0, init_angle:np.float32=0):
@@ -111,7 +113,8 @@ class Bat(BaseSprite):
             fixtures=[
                 b2FixtureDef(
                     shape=b2PolygonShape(
-                        vertices=self.BAT_POLY
+                        #vertices=self.BAT_POLY,
+                        box=(self.BAT_LENGTH, self.BAT_THICKNESS),
                     ),
                     # 必须设置密度，否则ApplyTorque施加扭矩不转动
                     density=2.0,
@@ -121,33 +124,44 @@ class Bat(BaseSprite):
             ])
         # 球拍质量约200g
         self.body.mass=0.2
-        #self.hull.fixedRotation = False
 
         # 创建y轴关节，只允许x轴移动
-        # 定义静态刚体 anchor_body
+        # 虚拟的球拍X轴滑动轴
         anchor_body = world.CreateStaticBody(
             position=(init_x, init_y),  # 设置锚点位置（例如坐标系原点）
-            shapes=b2PolygonShape(box=(0.01, 0.01)), # 定义一个微小碰撞形状（避免无形状报错）
-            userData="anchor", # 可选标识
+            shapes=b2PolygonShape(box=(0.01, 0.01)),  # 定义一个微小碰撞形状（避免无形状报错）
+            userData="anchor",  # 可选标识
+            # isSensor=True,         # 设置为感应器，不发生物理碰撞
         )
         for fixture in anchor_body.fixtures:
-            fixture.sensor = True # 设置为感应器，不发生物理碰撞
+            fixture.sensor = True  # 设置为感应器，不发生物理碰撞
 
         self.anchor_body = anchor_body
         target_body = self.body
-        # 此处用wheel关节，限制为x移动，可以旋转。不能使用棱柱关节b2PrismaticJointDef，不能转动
-        joint_def = b2WheelJointDef()
+        joint_def = b2PrismaticJointDef()
         joint_def.Initialize(anchor_body, target_body, anchor_body.worldCenter, (1, 0))  # 滑动轴为 X 轴
-        joint_def.enableLimit = True                        # 启用位移限制
-        joint_def.lowerTranslation = -COURT_W / 2           # X 轴最小位移（左移范围）
-        joint_def.upperTranslation = COURT_W / 2            # X 轴最大位移（右移范围）, 场地的宽度m
-
-        # 关节移动的阻尼，不设置
-        #joint_def.enableSpring = True
-        #joint_def.stiffness = 10.0
-        #joint_def.damping = 2.0
-
+        joint_def.enableLimit = True  # 启用位移限制
+        joint_def.lowerTranslation = -COURT_W / 2  # X 轴最小位移（左移范围）
+        joint_def.upperTranslation = COURT_W / 2  # X 轴最大位移（右移范围）, 场地的宽度m
         world.CreateJoint(joint_def)
+
+        v_slid_block = world.CreateDynamicBody(
+            position=(init_x, init_y),  # 设置锚点位置（例如坐标系原点）
+            shapes=b2PolygonShape(box=(0.01, 0.01)),  # 定义一个微小碰撞形状（避免无形状报错）
+            userData="anchor",  # 可选标识
+            # isSensor=True,         # 设置为感应器，不发生物理碰撞
+        )
+        for fixture in anchor_body.fixtures:
+            fixture.sensor = True  # 设置为感应器，不发生物理碰撞
+        # 球拍下端铰链关节
+        self.world.CreateRevoluteJoint(
+            bodyA=v_slid_block,
+            bodyB=self.body,
+            anchor=self.body.position,
+            lowerAngle=-8.0 * b2_pi / 180.0,
+            upperAngle=8.0 * b2_pi / 180.0,
+            enableLimit=True,
+        )
 
         # 球拍扭矩和转动 PID控制参数（根据刚体质量调试）
         self.pid = PIDController(kp=0.01, ki=2, kd=0.00008)
