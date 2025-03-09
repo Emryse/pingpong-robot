@@ -127,39 +127,44 @@ class Bat(BaseSprite):
 
         # 创建y轴关节，只允许x轴移动
         # 虚拟的球拍X轴滑动轴
-        anchor_body = world.CreateStaticBody(
+        x_axis_body = world.CreateStaticBody(
             position=(init_x, init_y),  # 设置锚点位置（例如坐标系原点）
             shapes=b2PolygonShape(box=(0.01, 0.01)),  # 定义一个微小碰撞形状（避免无形状报错）
-            userData="anchor",  # 可选标识
+            userData="x_axis_body",  # 可选标识
             # isSensor=True,         # 设置为感应器，不发生物理碰撞
         )
-        for fixture in anchor_body.fixtures:
+        for fixture in x_axis_body.fixtures:
             fixture.sensor = True  # 设置为感应器，不发生物理碰撞
+        self.x_axis_body = x_axis_body
 
-        self.anchor_body = anchor_body
-        target_body = self.body
-        joint_def = b2PrismaticJointDef()
-        joint_def.Initialize(anchor_body, target_body, anchor_body.worldCenter, (1, 0))  # 滑动轴为 X 轴
-        joint_def.enableLimit = True  # 启用位移限制
-        joint_def.lowerTranslation = -COURT_W / 2  # X 轴最小位移（左移范围）
-        joint_def.upperTranslation = COURT_W / 2  # X 轴最大位移（右移范围）, 场地的宽度m
-        world.CreateJoint(joint_def)
-
-        v_slid_block = world.CreateDynamicBody(
+        slide_body = world.CreateDynamicBody(
             position=(init_x, init_y),  # 设置锚点位置（例如坐标系原点）
             shapes=b2PolygonShape(box=(0.01, 0.01)),  # 定义一个微小碰撞形状（避免无形状报错）
-            userData="anchor",  # 可选标识
+            userData="slide_body",  # 可选标识
             # isSensor=True,         # 设置为感应器，不发生物理碰撞
         )
-        for fixture in anchor_body.fixtures:
+        for fixture in slide_body.fixtures:
             fixture.sensor = True  # 设置为感应器，不发生物理碰撞
+        self.slide_body = slide_body
+
+        # 创建x轴棱柱滑动关节
+        self.world.CreatePrismaticJoint(
+            bodyA=x_axis_body,
+            bodyB=slide_body,
+            anchor=x_axis_body.worldCenter,
+            axis=(1, 0),
+            enableLimit=True,
+            lowerTranslation=-COURT_W / 2,  # X 轴最小位移（左移范围）
+            upperTranslation=COURT_W / 2  # X 轴最大位移（右移范围）, 场地的宽度/2
+        )
+
         # 球拍下端铰链关节
         self.world.CreateRevoluteJoint(
-            bodyA=v_slid_block,
+            bodyA=slide_body,
             bodyB=self.body,
             anchor=self.body.position,
-            lowerAngle=-8.0 * b2_pi / 180.0,
-            upperAngle=8.0 * b2_pi / 180.0,
+            lowerAngle=math.radians(-90),
+            upperAngle=math.radians(90),
             enableLimit=True,
         )
 
@@ -224,7 +229,8 @@ class Bat(BaseSprite):
         ]
         pygame.draw.polygon(surface, color=(255, 255, 255), points=world_to_screen(points))
         """
-        B2Drawer.draw_body(self.anchor_body, surface)
+        B2Drawer.draw_body(self.x_axis_body, surface)
+        B2Drawer.draw_body(self.slide_body, surface)
         B2Drawer.draw_body(self.body, surface)
 
 class PIDController:
