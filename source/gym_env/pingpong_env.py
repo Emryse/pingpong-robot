@@ -126,6 +126,12 @@ class PingPongEnv(gym.Env):
         super().reset()
         # 总运行时间
         self.total_time = 0.0
+        # 球拍初始位置x
+        self.bat.init_x = 0.0
+        # 球初始位置
+        self.ball.init_x = TABLE_W * np.random.rand()
+
+        return (self.bat.init_x, self.ball.init_x, 0.0)
 
     def step(self, action):
         for event in pygame.event.get():
@@ -144,8 +150,9 @@ class PingPongEnv(gym.Env):
         self.total_time += 1.0 / FPS
 
         #self.state = self.render("state_pixels")
+        observation = (self.bat.body.position, self.ball.body.position.x, self.ball.body.position.y)
 
-        return self.observation_space.sample(), 0, not self.is_open, {}
+        return observation, 0, not self.is_open, {}
 
     def seed(self, seed=None):
         super().seed(seed)

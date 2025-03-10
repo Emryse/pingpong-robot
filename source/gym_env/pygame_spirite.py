@@ -70,7 +70,7 @@ class Ball(BaseSprite):
     def __init__(self, world, init_x=0, init_y=0, init_angle:np.float32=0):
         super().__init__(world, init_x, init_y, init_angle)
         self.radius = 0.02 # 乒乓球标准直径 40mm
-        self.hull = self.world.CreateDynamicBody(
+        self.body = self.world.CreateDynamicBody(
             fixtures=b2FixtureDef(
                 shape=b2CircleShape(radius=self.radius),
                 #density=1,
@@ -80,18 +80,18 @@ class Ball(BaseSprite):
             bullet=True,
             position = (init_x, init_y),
         )
-        self.hull.damping = 0.15, # 空气阻力
-        self.hull.mass = 2.75 / 1000
+        self.body.damping = 0.15, # 空气阻力
+        self.body.mass = 2.75 / 1000
 
     def step(self):
-        self.init_x = self.hull.position.x
-        self.init_y = self.hull.position.y
+        self.init_x = self.body.position.x
+        self.init_y = self.body.position.y
         #print('ball w=\t%s\t%s' % world_to_screen((self.init_x, self.init_y)))
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
         #center = world_to_screen(Vector2(self.init_x, self.init_y) + Vector2(translation))
         #pygame.draw.circle(surface, color=(255, 255, 255), center=center, radius=self.radius * PPM)
-        B2Drawer.draw_body(self.hull, surface)
+        B2Drawer.draw_body(self.body, surface)
 
 class Bat(BaseSprite):
     """
