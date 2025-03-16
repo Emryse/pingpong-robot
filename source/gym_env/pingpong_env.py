@@ -168,9 +168,11 @@ class PingPongEnv(gym.Env):
                 self.is_open = False
                 self.close()
 
+            """
             if event.type == pygame.MOUSEMOTION:  # 鼠标控制球拍
                 world_pos = screen_to_world(event.pos)
-                self.bat.position = b2Vec2(world_pos)  # Y轴固定高度
+                self.bat.body.position = b2Vec2(world_pos)  # Y轴固定高度
+            """
 
         if action is not None:
             # 从Agent返回的可能为pytorch.Tensor类型
@@ -192,12 +194,16 @@ class PingPongEnv(gym.Env):
         observation = (self.bat.body.position.x, self.ball.body.position.x, self.ball.body.position.y)
 
         # 计算奖励值
-        reward = 1.0
-        # 奖励值 反比于求碰撞场地外墙次数 ball_contact_court_n, 可以尝试结合球拍击中球次数、运行时间
-        if self.is_open:
+        # 奖励值 规则
+        # 1. 球在球拍上方时，奖励 = 1 - x轴距球拍距离/场地宽度，球在球拍下方时0
+        # 奖励规则应该只与当前状态相关，不依赖历史状态
+        # 2. 效果不好 反比于求碰撞场地外墙次数 ball_contact_court_n, 可以尝试结合球拍击中球次数、运行时间
+        if not self.is_open:
+            reward = 0.0
+        elif self.ball.body.position.y < self.bat.body.position.y:
             reward = 0.0
         else:
-            reward = 1 - self.ball_contact_court_n / self.ball_contact_court_max
+            reward = 1 - (np.abs(self.ball.body.position.x - self.bat.body.position.x) / COURT_W)
 
         return observation, reward, not self.is_open, {}
 

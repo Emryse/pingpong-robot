@@ -180,11 +180,14 @@ class Bat(BaseSprite):
         force = (float(force), 0) #self.hull.GetWorldVector((float(force), 0))
         self.body.ApplyForce(force, self.body.worldCenter, True)
 
-        # 用2pi取模
+        # PID控制球拍转动角度
+        # 角度差，用2pi取模，限定在一个圆周角内
         angle_diff = (math.radians(angle) - self.body.angle) % (2 * math.pi)
         # 限制在 [-pi ,pi] 之间
         angle_diff = angle_diff - 2 * math.pi if angle_diff > math.pi else angle_diff
+        # PID计算瞬时转动扭矩
         torque = self.pid.compute(angle_diff, 1.0 / FPS)
+        # 施加瞬时扭矩
         self.body.ApplyTorque(torque, True)
 
         # 角速度限制实现
@@ -222,6 +225,7 @@ class Bat(BaseSprite):
             self.body.linearVelocity = (0, 0)
             self.body.angularVelocity = 0.0
             self.body.angle = self.angle
+            self.slide_body.position.x = self.init_x
             self.need_reset = False
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
