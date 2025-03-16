@@ -70,15 +70,20 @@ class Ball(BaseSprite):
         )
         self.body.damping = 0.15, # 空气阻力
         self.body.mass = 2.75 / 1000
+        # 被重置状态的标志 False
+        self.need_reset = False
 
     def step(self):
-        self.init_x = self.body.position.x
-        self.init_y = self.body.position.y
-        #print('ball w=\t%s\t%s' % world_to_screen((self.init_x, self.init_y)))
+        # 如果被重置状态，更新position
+        if self.need_reset:
+            self.body.position.x = self.init_x
+            self.body.position.y = self.init_y
+            self.body.linearVelocity = (0, 0)
+            self.body.angularVelocity = 0.0
+            self.body.angle = 0.0
+            self.need_reset = False
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
-        #center = world_to_screen(Vector2(self.init_x, self.init_y) + Vector2(translation))
-        #pygame.draw.circle(surface, color=(255, 255, 255), center=center, radius=self.radius * PPM)
         B2Drawer.draw_body(self.body, surface)
 
 class Bat(BaseSprite):
@@ -161,6 +166,9 @@ class Bat(BaseSprite):
         # 球拍扭矩和转动 PID控制参数（根据刚体质量调试）
         self.pid = PIDController(kp=0.01, ki=2, kd=0.00008)
 
+        # 被重置状态的标志 False
+        self.need_reset = False
+
     def act(self, action):
         """
         球拍动作
@@ -207,10 +215,14 @@ class Bat(BaseSprite):
         """
 
     def step(self):
-        self.init_x = self.body.position.x
-        self.init_y = self.body.position.y
-        pos = world_to_screen((self.init_x, self.init_y))
-        #print('bat w=\t%s\t%s    angel=\t角度:%s\t角速度:%s' % (pos[0], pos[1],  self.body.angle, self.hull.angularVelocity))
+        # 如果被重置状态，更新position
+        if self.need_reset:
+            self.body.position.x = self.init_x
+            self.body.position.y = self.init_y
+            self.body.linearVelocity = (0, 0)
+            self.body.angularVelocity = 0.0
+            self.body.angle = self.angle
+            self.need_reset = False
 
     def draw(self, surface, translation:tuple[int,int]=(0,0), angle:np.float32=None):
         """

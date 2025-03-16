@@ -65,7 +65,7 @@ class PingPongEnv(gym.Env):
     bat_angle_max = 90
 
     # 求最多碰撞场地外墙的次数，超过则结束。碰撞越少则奖励值越高
-    ball_contact_court_max = 10
+    ball_contact_court_max = 5
 
     # 球和球拍的坐标原点移动到 球桌下边缘中点
     translation = (int(COURT_W / 2), (COURT_H - TABLE_H) / 2)
@@ -82,7 +82,8 @@ class PingPongEnv(gym.Env):
         self.screen = None
         self.clock = None
         self.is_open = True
-        # 求碰撞场地外墙次数，最多ball_contact_court_max
+        self.total_time = 0.0
+        # 球碰撞场地外墙次数，最多ball_contact_court_max
         self.ball_contact_court_n = 0
 
         # 定义场地， v0版本为垂直抛球接球
@@ -146,17 +147,27 @@ class PingPongEnv(gym.Env):
         self.is_open = True
         # 总运行时间
         self.total_time = 0.0
-        # 球拍初始位置x
-        self.bat.init_x = 0.0
-        # 球初始位置
-        self.ball.init_x = TABLE_W * np.random.rand()
+        # 球碰撞场地外墙次数
+        self.ball_contact_court_n = 0
 
-        return self.bat.init_x, self.ball.init_x, 0.0
+        # 球拍初始位置x
+        self.bat.init_x = COURT_W / 2
+        self.bat.angle = 0.0
+        self.bat.need_reset = True
+
+        # 球初始位置, 自由落体
+        self.ball.init_x = TABLE_W * np.random.rand()
+        self.ball.init_y = COURT_H
+        self.ball.need_reset = True
+
+        return self.bat.init_x, self.ball.init_x, self.ball.init_y
 
     def step(self, action):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_open = False
+                self.close()
+
             if event.type == pygame.MOUSEMOTION:  # 鼠标控制球拍
                 world_pos = screen_to_world(event.pos)
                 self.bat.position = b2Vec2(world_pos)  # Y轴固定高度
@@ -206,6 +217,7 @@ class PingPongEnv(gym.Env):
             return
 
         self.surf = pygame.Surface((SCREEN_W, SCREEN_H))
+
         # 绘制场地
         #B2Drawer.draw_body(self.court, self.surf)
         for i in range(4):

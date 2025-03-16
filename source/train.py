@@ -37,8 +37,7 @@ for i in range(n_episodes):
     score = 0
     done = False
     while not done:
-        #action = env.action_space.sample()
-        # 基于当前状态，预测下一步action、action的概率密度、 期望回报值
+        # 基于当前状态，预测下一步action、action的概率密度、期望回报值
         action, prob, val = agent.choose_action(state)
         # 基于预测的action, 计算下一步的状态、回报值
         state_, reward, done, info = env.step(action)
@@ -48,7 +47,7 @@ for i in range(n_episodes):
 
         # 记录轨迹轨迹
         agent.remember(state, action, prob, val, reward, done)
-        # 每N更新网络
+        # 每N次更新策略
         if total_steps_n % N == 0:
             agent.learn()
             total_learn_n += 1
@@ -56,3 +55,5 @@ for i in range(n_episodes):
         # 新状态作为当前状态
         state = state_
         print(f"""episode {i}: {state}, {reward}, {done}, {info}""")
+        if done:
+            print('\n')
