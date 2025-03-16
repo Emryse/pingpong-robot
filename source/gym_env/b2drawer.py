@@ -6,7 +6,7 @@ from .utils import world_to_screen, PPM
 
 class B2Drawer:
     """
-    Box2BBody的通用绘制类
+    Box2B Body的通用绘制类
     """
     def __init__(self, ):
         pass

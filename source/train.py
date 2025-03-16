@@ -55,5 +55,4 @@ for i in range(n_episodes):
 
         # 新状态作为当前状态
         state = state_
-
-        #print(f"""episode {i}: {observation}, {reward}, {done}, {info}""")
+        print(f"""episode {i}: {state}, {reward}, {done}, {info}""")

@@ -27,6 +27,20 @@ class FrictionDetector(b2ContactListener):
         b2ContactListener.__init__(self)
         self.env = env
 
+    def BeginContact(self, contact):
+        fixtureA = contact.fixtureA
+        fixtureB = contact.fixtureB
+        # 获取物体和 fixture 的标识符
+        bodyA = fixtureA.body
+        bodyB = fixtureB.body
+        userDataArray = (bodyA.userData, bodyB.userData)
+
+        # 乒乓球碰撞到场地外墙，超过最大次数则结束
+        if 'ball' in userDataArray and 'court' in userDataArray:
+            self.env.ball_contact_court_n += 1
+            if self.env.ball_contact_court_n > self.env.ball_contact_court_max:
+                self.env.is_open = False
+
 class PingPongEnv(gym.Env):
     """
     Env Constants:
@@ -50,6 +64,9 @@ class PingPongEnv(gym.Env):
     # 球拍最大转动角度
     bat_angle_max = 90
 
+    # 求最多碰撞场地外墙的次数，超过则结束。碰撞越少则奖励值越高
+    ball_contact_court_max = 10
+
     # 球和球拍的坐标原点移动到 球桌下边缘中点
     translation = (int(COURT_W / 2), (COURT_H - TABLE_H) / 2)
 
@@ -60,11 +77,13 @@ class PingPongEnv(gym.Env):
 
     def __init__(self):
         pygame.init()
-        self.contactListener_keepref = FrictionDetector(self)
-        self.world = Box2D.b2World((0.0, -9.81), contactListener=self.contactListener_keepref)
+        self.contactListener = FrictionDetector(self)
+        self.world = Box2D.b2World((0.0, -9.81), contactListener=self.contactListener)
         self.screen = None
         self.clock = None
         self.is_open = True
+        # 求碰撞场地外墙次数，最多ball_contact_court_max
+        self.ball_contact_court_n = 0
 
         # 定义场地， v0版本为垂直抛球接球
         self.court = self.world.CreateBody(
@@ -124,6 +143,7 @@ class PingPongEnv(gym.Env):
         options: Optional[dict] = None,
     ):
         super().reset()
+        self.is_open = True
         # 总运行时间
         self.total_time = 0.0
         # 球拍初始位置x
@@ -131,7 +151,7 @@ class PingPongEnv(gym.Env):
         # 球初始位置
         self.ball.init_x = TABLE_W * np.random.rand()
 
-        return (self.bat.init_x, self.ball.init_x, 0.0)
+        return self.bat.init_x, self.ball.init_x, 0.0
 
     def step(self, action):
         for event in pygame.event.get():
@@ -160,7 +180,15 @@ class PingPongEnv(gym.Env):
         #self.state = self.render("state_pixels")
         observation = (self.bat.body.position.x, self.ball.body.position.x, self.ball.body.position.y)
 
-        return observation, 0, not self.is_open, {}
+        # 计算奖励值
+        reward = 1.0
+        # 奖励值 反比于求碰撞场地外墙次数 ball_contact_court_n, 可以尝试结合球拍击中球次数、运行时间
+        if self.is_open:
+            reward = 0.0
+        else:
+            reward = 1 - self.ball_contact_court_n / self.ball_contact_court_max
+
+        return observation, reward, not self.is_open, {}
 
     def seed(self, seed=None):
         super().seed(seed)

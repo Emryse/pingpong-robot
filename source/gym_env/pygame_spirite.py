@@ -1,18 +1,10 @@
 
-import pygame, sys
 import numpy as np
 import math
-from moviepy.video.tools.drawing import circle
-
-from pygame.math import Vector2
 from gym_env.b2drawer import B2Drawer
-
-import Box2D
 from Box2D import (b2Vec2, b2EdgeShape, b2CircleShape, b2FixtureDef, b2LoopShape, b2PolygonShape,
                    b2RevoluteJointDef, b2PrismaticJointDef, b2_pi, b2WheelJointDef)
 from gym_env.utils import world_to_screen, screen_to_world, FPS, PPM, COURT_W
-from pingpong import world
-
 
 class BaseSprite:
 
@@ -57,11 +49,6 @@ class BaseSprite:
         """
         return False
 
-    @property
-    def outline(self) -> np.ndarray:
-        return np.ndarray()
-
-
 class Ball(BaseSprite):
     """
     Ping pong ball
@@ -79,6 +66,7 @@ class Ball(BaseSprite):
             ),
             bullet=True,
             position = (init_x, init_y),
+            userData="ball",
         )
         self.body.damping = 0.15, # 空气阻力
         self.body.mass = 2.75 / 1000
@@ -121,7 +109,9 @@ class Bat(BaseSprite):
                     restitution=0.1,  # 弹性提升
                     friction=0.3  # 摩擦降低
                 )
-            ])
+            ],
+            userData="bat",
+        )
         # 球拍质量约200g
         self.body.mass=0.2
 
@@ -194,7 +184,7 @@ class Bat(BaseSprite):
         if abs(self.body.angularVelocity) > max_angular_speed:
             self.body.angularVelocity = math.copysign(max_angular_speed, self.body.angularVelocity)
 
-        print('bat.act \t center: %s, \t force: %s \t angle: %s \t angle_diff: %s \t torque: %s' % (self.body.worldCenter, force, angle, angle_diff, torque))
+        #print('bat.act \t center: %s, \t force: %s \t angle: %s \t angle_diff: %s \t torque: %s' % (self.body.worldCenter, force, angle, angle_diff, torque))
 
         # 给球拍施加扭矩，旋转角度，限制角度范围
         """current_angle = self.body.angle

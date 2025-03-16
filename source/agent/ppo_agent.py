@@ -89,7 +89,6 @@ class ActorNetwork(nn.Module):
         dist = dist + 1e-5
         #dist = torch.exp(dist)
 
-        print('forward dist: %s' % dist)
         return dist
 
     def save_checkpoint(self):
@@ -277,22 +276,28 @@ class Agent:
                 # 等效于 概率密度log 求差 后，e指数
                 # prob_ratio = (new_probs - old_probs).exp()
 
+                ### 根据新旧策略比例的阈值，对新旧策略比例进行裁剪clip
                 # 近端策略优化裁剪目标函数公式的左侧项
                 weighted_probs = advantage[batch] * prob_ratio
                 # 公式的右侧项，ratio小于1-eps就输出1-eps，大于1+eps就输出1+eps
                 weighted_clipped_probs = torch.clamp(prob_ratio, 1 - self.policy_clip,
                                                      1 + self.policy_clip) * advantage[batch]
-                # 计算损失值进行梯度下降
+                ### 计算损失值
                 actor_loss = -torch.min(weighted_probs, weighted_clipped_probs).mean()
                 returns = advantage[batch] + values[batch]
                 critic_loss = (returns - critic_value) ** 2
                 critic_loss = critic_loss.mean()
 
                 total_loss = actor_loss + 0.5 * critic_loss
+
+                ### 梯度下降，优化网络
+                # 清除策略网络 和 评价网络的 梯度状态，反向传播
                 self.actor.optimizer.zero_grad()
                 self.critic.optimizer.zero_grad()
                 total_loss.backward()
+                # 优化策略和评价网络参数
                 self.actor.optimizer.step()
                 self.critic.optimizer.step()
 
+        # 每个学习周期结束，清除历史轨迹
         self.memory.clear_memory()
