@@ -142,6 +142,14 @@ class PingPongEnv(gym.Env):
                 self.bat.position = b2Vec2(world_pos)  # Y轴固定高度
 
         if action is not None:
+            # 从Agent返回的可能为pytorch.Tensor类型
+            if type(action) != np.ndarray:
+                action = action.numpy()
+
+            # 将agent动作值按比例(0,1)映射到动作值空间(low, high)
+            high = self.action_space.high
+            low = self.action_space.low
+            action = low + (high - low) * action
             self.bat.act(action)
 
         self.ball.step()
@@ -150,7 +158,7 @@ class PingPongEnv(gym.Env):
         self.total_time += 1.0 / FPS
 
         #self.state = self.render("state_pixels")
-        observation = (self.bat.body.position, self.ball.body.position.x, self.ball.body.position.y)
+        observation = (self.bat.body.position.x, self.ball.body.position.x, self.ball.body.position.y)
 
         return observation, 0, not self.is_open, {}
 

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions.categorical import Categorical
+from torch.distributions import Beta
 
 class PPOMemory:
     """
@@ -60,13 +61,17 @@ class ActorNetwork(nn.Module):
         super(ActorNetwork, self).__init__()
 
         self.checkpoint_file = os.path.join(chkpt_dir, 'actor_torch_ppo')
+        # 策略网络，生成action的概率分布参数
+        # 可以选择一种概率分布模型，比如此处选择 Beta分布 参数 alpha、beta 需大于0。也可以选择高斯分布 mu、sigma(std标准差)
         self.actor = nn.Sequential(
             nn.Linear(*input_dims, fc1_dims),
             nn.ReLU(),
             nn.Linear(fc1_dims, fc2_dims),
             nn.ReLU(),
-            nn.Linear(fc2_dims, n_actions),
-            nn.Softmax(dim=-1)
+            # 每个action输出 alpha、beta两个参数
+            nn.Linear(fc2_dims, 2 * n_actions),
+            # Relu限制值域[0, oo)，线性高效
+            nn.ReLU()
         )
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
@@ -75,14 +80,17 @@ class ActorNetwork(nn.Module):
 
     def forward(self, state):
         """
-        返回动作的概率分布
+        返回动作的取值 (-1, 1)范围内
         :param state:
         :return:
         """
         dist = self.actor(state)
-        dist = Categorical(dist)
+        # 避免0
+        dist = dist + 1e-5
+        #dist = torch.exp(dist)
 
-        return dist  # 返回动作的概率分布
+        print('forward dist: %s' % dist)
+        return dist
 
     def save_checkpoint(self):
         """
@@ -185,16 +193,28 @@ class Agent:
         """
         # 维度变换 [n_state]-->tensor[1,n_states]
         state = torch.tensor([observation], dtype=torch.float).to(self.actor.device)
-        # 当前状态下，每个动作的概率分布 [1,n_states]
-        dist = self.actor(state)
-        # 预测，当前状态的state_value  [b,1]
-        value = self.critic(state)
-        # 依据其概率随机挑选一个动作
+        # 策略网络生成动作值概率函数参数，Beta分布 alpha、beta浓度
+        dist = self.actor(state).detach()
+        # 各个action参数的概率函数参数
+        dist = dist.reshape(int(dist.size(1) / 2), 2)
+        # Beta分布 [0,1]（适用于有界动作），也可以用高斯（正态）分布，但是需要clip超出值域的值
+        dist = Beta(dist[:, 0], dist[:, 1])
+        # 从概率分布中采样，让输出值在策略网络输出附近出现随机分布
         action = dist.sample()
 
-        probs = torch.squeeze(dist.log_prob(action)).item()
-        action = torch.squeeze(action).item()
-        value = torch.squeeze(value).item()
+        # 预测，当前状态的state_value  [b,1]
+        # 为什么用评价网络生成期望回报值？
+        value = self.critic(state).detach()
+
+        # 输出值的概率密度的对数log(e,p)（log让概率密度在更广的(0, oo)域分布）
+        probs = torch.squeeze(dist.log_prob(action)).numpy()
+        action = torch.squeeze(action).numpy()
+        value = torch.squeeze(value).numpy()
+
+        # 此处不转换输出值到外部值域，因为后面还需要用此值计算新策略的期望
+        # 将action服从Beta分布的值 从 [0,1] 映射到 [-1,1]
+        # 转换为numpy数组，不强制传递给env torch.Tensor类型
+        # action = (action * 2.0 - 1.0).numpy()
 
         return action, probs, value
 
@@ -225,11 +245,17 @@ class Agent:
                 states = torch.tensor(state_arr[batch], dtype=torch.float).to(self.actor.device)
                 old_probs = torch.tensor(old_prob_arr[batch]).to(self.actor.device)
                 actions = torch.tensor(action_arr[batch]).to(self.actor.device)
+
                 # 用当前网络进行预测
                 dist = self.actor(states)
-                critic_value = self.critic(states)
+                # 各个action参数的概率函数参数
+                dist = dist.reshape(int(dist.size(1) / 2), 2)
+                # Beta分布，与choose_action保持一致
+                dist = Beta(dist[:, 0], dist[:, 1])
 
+                critic_value = self.critic(states)
                 critic_value = torch.squeeze(critic_value)
+
                 # 每一轮更新一次策略网络预测的状态
                 new_probs = dist.log_prob(actions)
                 # 新旧策略之间的比例
