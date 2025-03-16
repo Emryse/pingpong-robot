@@ -207,7 +207,11 @@ class Agent:
         value = self.critic(state).detach()
 
         # 输出值的概率密度的对数log(e,p)（log让概率密度在更广的(0, oo)域分布）
-        probs = torch.squeeze(dist.log_prob(action)).numpy()
+        probs = torch.squeeze(dist.log_prob(action))
+        # 求解action中多维值的联合概率密度（条件概率求积）
+        # 将action中多维值 的概率密度 求积，得到action的多值联合概率密度，在求log，等效于对概率密度的log值求和
+        probs = torch.sum(probs).numpy()
+
         action = torch.squeeze(action).numpy()
         value = torch.squeeze(value).numpy()
 
@@ -219,16 +223,17 @@ class Agent:
         return action, probs, value
 
     def learn(self):
-        # 每次学习需要更新n_epochs次参数
+        # 每次学习需要更新n_epochs次参数，学习完后清空轨迹
         for _ in range(self.n_epochs):
-            # 提取数据集
+            # 提取数据集，每个epoch从历史轨迹中，shuffle打乱，随机分成不重复的组
             state_arr, action_arr, old_prob_arr, vals_arr, \
             reward_arr, dones_arr, batches = \
                 self.memory.generate_batches()
 
+            # 计算优势函数，为每个轨迹计算优势函数
             values = vals_arr
             advantage = np.zeros(len(reward_arr), dtype=np.float32)
-            # 计算优势函数
+
             for t in range(len(reward_arr) - 1): # 逆序时序差分值 axis=1轴上倒着取 [], [], []
                 discount = 1
                 a_t = 0
@@ -238,8 +243,10 @@ class Agent:
                     discount *= self.gamma * self.gae_lambda
                 advantage[t] = a_t
             advantage = torch.tensor(advantage).to(self.actor.device)
+
             # 估计状态的值函数的数组
             values = torch.tensor(values).to(self.actor.device)
+
             for batch in batches:
                 # 获取数据
                 states = torch.tensor(state_arr[batch], dtype=torch.float).to(self.actor.device)
@@ -249,7 +256,7 @@ class Agent:
                 # 用当前网络进行预测
                 dist = self.actor(states)
                 # 各个action参数的概率函数参数
-                dist = dist.reshape(int(dist.size(1) / 2), 2)
+                dist = dist.reshape(dist.size(0) * int(dist.size(1) / 2), 2)
                 # Beta分布，与choose_action保持一致
                 dist = Beta(dist[:, 0], dist[:, 1])
 
@@ -257,10 +264,19 @@ class Agent:
                 critic_value = torch.squeeze(critic_value)
 
                 # 每一轮更新一次策略网络预测的状态
-                new_probs = dist.log_prob(actions)
+                # 新策略下原有actions的概率密度log
+                new_probs = dist.log_prob(actions.flatten())
+                # reshape为多个actions x 多值 形状的概率密度log
+                new_probs = new_probs.reshape(batch.size, 2)
+                # 求解action中多维值的联合概率密度（条件概率求积）
+                # 将action中多维值 的概率密度 求积，得到action的多值联合概率密度，在求log，等效于对概率密度的log值求和
+                new_probs = torch.sum(new_probs, dim=1)
+
                 # 新旧策略之间的比例
                 prob_ratio = new_probs.exp() / old_probs.exp()
+                # 等效于 概率密度log 求差 后，e指数
                 # prob_ratio = (new_probs - old_probs).exp()
+
                 # 近端策略优化裁剪目标函数公式的左侧项
                 weighted_probs = advantage[batch] * prob_ratio
                 # 公式的右侧项，ratio小于1-eps就输出1-eps，大于1+eps就输出1+eps
