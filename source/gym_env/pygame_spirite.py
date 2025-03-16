@@ -90,10 +90,10 @@ class Bat(BaseSprite):
     """
     标准球拍尺寸 158*152mm 厚度15mm 约80-100g
     """
-    # 球拍外轮廓
+    # 球拍外尺寸
     BAT_THICKNESS =  0.015
     BAT_LENGTH =  0.158
-    BAT_POLY = [(-0.079, -0.0075), (0.079, -0.0075), (0.079, 0.0075), (-0.079, 0.0075)]
+    #BAT_POLY = [(-0.079, -0.0075), (0.079, -0.0075), (0.079, 0.0075), (-0.079, 0.0075)]
 
     def __init__(self, world, init_x=0, init_y=0, init_angle:np.float32=0):
         BaseSprite.__init__(self, world, init_x, init_y, init_angle)
@@ -158,9 +158,9 @@ class Bat(BaseSprite):
             bodyA=slide_body,
             bodyB=self.body,
             anchor=self.body.position,
+            enableLimit=True,
             lowerAngle=math.radians(-90),
             upperAngle=math.radians(90),
-            enableLimit=True,
         )
 
         # 球拍扭矩和转动 PID控制参数（根据刚体质量调试）
@@ -235,8 +235,8 @@ class Bat(BaseSprite):
         ]
         pygame.draw.polygon(surface, color=(255, 255, 255), points=world_to_screen(points))
         """
-        B2Drawer.draw_body(self.x_axis_body, surface)
-        B2Drawer.draw_body(self.slide_body, surface)
+        #B2Drawer.draw_body(self.x_axis_body, surface)
+        #B2Drawer.draw_body(self.slide_body, surface)
         B2Drawer.draw_body(self.body, surface)
 
 class PIDController:

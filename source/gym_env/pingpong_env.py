@@ -205,7 +205,7 @@ class PingPongEnv(gym.Env):
         else:
             reward = 1 - (np.abs(self.ball.body.position.x - self.bat.body.position.x) / COURT_W)
 
-        return observation, reward, not self.is_open, {}
+        return observation, 10 * reward, not self.is_open, {}
 
     def seed(self, seed=None):
         super().seed(seed)
@@ -229,7 +229,7 @@ class PingPongEnv(gym.Env):
         for i in range(4):
             pygame.draw.polygon(self.surf, color=(100, 100, 100), points=world_to_screen(self.court.fixtures[i].shape.vertices), width=20)
         # 绘制球桌，v0版本为垂直抛球接球，不需要球桌
-        B2Drawer.draw_body(self.table, self.surf)
+        #B2Drawer.draw_body(self.table, self.surf)
 
         self.ball.draw(self.surf)
         self.bat.draw(self.surf)
