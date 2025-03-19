@@ -10,12 +10,13 @@ from agent.ppo_agent import Agent
 for env in envs.registry.all():
     print(env.id)
 
-# 训练轮数
+# 总训练轮数
 n_episodes = 100
+# 每次学习周期里，对N个历史轨迹分组时，每组的轨迹数量
 batch_size = 5
-# 每次更新的次数
+# 每个学习周期里，使用该周期记录的历史轨迹，更新策略的次数（on-policy)
 n_epochs = 4
-# 学习率
+# 策略网络的学习率，SGD随机梯度下降的参数变化比例
 alpha = 0.0003
 # 每10步更新一次网络
 N = 10

@@ -202,7 +202,7 @@ class Agent:
         action = dist.sample()
 
         # 预测，当前状态的state_value  [b,1]
-        # 为什么用评价网络生成期望回报值？
+        # 为什么用评价函数生成期望回报值？用NN学习特定状态下，环境返回奖励的规律（间接的学习了物理世界的预测）
         value = self.critic(state).detach()
 
         # 输出值的概率密度的对数log(e,p)（log让概率密度在更广的(0, oo)域分布）
@@ -222,14 +222,21 @@ class Agent:
         return action, probs, value
 
     def learn(self):
-        # 每次学习需要更新n_epochs次参数，学习完后清空轨迹
+        # 每次学习需要更新n_epochs次参数，学习完后清空轨迹(on-policy在策略，用当前参数生成的历史轨迹，预测
         for _ in range(self.n_epochs):
-            # 提取数据集，每个epoch从历史轨迹中，shuffle打乱，随机分成不重复的组
+            # 提取数据集，每个epoch从历史轨迹中，shuffle打乱，随机分成不重复的组(分组数量为
             state_arr, action_arr, old_prob_arr, vals_arr, \
             reward_arr, dones_arr, batches = \
                 self.memory.generate_batches()
 
             # 计算优势函数，为每个轨迹计算优势函数
+            # 优势函数 At = Q st,at - V st 直观含义：当前action的优劣 = 当前状态下采用当前Actions的（奖励+ 带逐步衰减未来奖励值）期望（均值） - 当前状态下所有可能的actions（奖励 + 带衰减值的奖励的）期望均值
+            # Q st,at 当前状态st下at的 （奖励 + 带衰减的下一步所有可能actions期望奖励V st+1）的期望; 计算的基础时从时序k倒推Vsk, Vsk-1 ... Vst+1
+            # V st 状态st下到未来（到历史轨迹最后一个）所有可能的action的(奖励 + 带逐步衰减的所有可能action的期望奖励)的期望（均值）
+            # At从缓存序列倒推倒步骤 泛化优势估计 GAE Generalized Advantage Estimation：
+            # At-N = Sum n=0-N gamma ** n * (-Vsn + Rn + gamma * Vsn+1)
+            # 特殊的当t=K(历史轨迹中最后一个序列), 上式n=N=0 Vsk+1不存在，所以从倒数第2个轨迹开始倒推累加计算 Ak-1 = -Vsk-1 + Rk-1 + Vsk
+            # 下面算法中 (1 - int(dones_arr[k]))， 当训练step失败时，则忽略未来步回报评价值
             values = vals_arr
             advantage = np.zeros(len(reward_arr), dtype=np.float32)
 
@@ -237,8 +244,7 @@ class Agent:
                 discount = 1
                 a_t = 0
                 for k in range(t, len(reward_arr) - 1):
-                    a_t += discount * (reward_arr[k] + self.gamma * values[k + 1] * \
-                                       (1 - int(dones_arr[k])) - values[k])
+                    a_t += discount * (reward_arr[k] + self.gamma * values[k + 1] * (1 - int(dones_arr[k])) - values[k])
                     discount *= self.gamma * self.gae_lambda
                 advantage[t] = a_t
             advantage = torch.tensor(advantage).to(self.actor.device)
@@ -252,7 +258,7 @@ class Agent:
                 old_probs = torch.tensor(old_prob_arr[batch]).to(self.actor.device)
                 actions = torch.tensor(action_arr[batch]).to(self.actor.device)
 
-                # 用当前网络进行预测
+                # 用当前网络参数，对shuffle后的历史状态分组重新进行预测，on-policy在策略模式
                 dist = self.actor(states)
                 # 各个action参数的概率函数参数
                 dist = dist.reshape(dist.size(0) * int(dist.size(1) / 2), 2)
@@ -284,10 +290,18 @@ class Agent:
                                                      1 + self.policy_clip) * advantage[batch]
                 ### 计算损失值
                 actor_loss = -torch.min(weighted_probs, weighted_clipped_probs).mean()
+
+                ### 值函数更新 Lv = (V(st) - Rt)**2
+                # advantage 为超出估计的期望均值的回报，values为估计的平均回报，和为估计后训练样本（轨迹）回报
                 returns = advantage[batch] + values[batch]
+                # 重新用critic采样后，比较与 训练样本 估计回报的 方差
                 critic_loss = (returns - critic_value) ** 2
                 critic_loss = critic_loss.mean()
 
+                ### 总损失函数 L = Lclip - c1*Lv + c2*H
+                # Lclip 用策略比例裁剪后的策略损失函数
+                # Lv 状态值函数损失函数
+                # H为策略的熵 -Sum(action*log(probs))
                 total_loss = actor_loss + 0.5 * critic_loss
 
                 ### 梯度下降，优化网络
