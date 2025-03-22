@@ -154,9 +154,9 @@ class Agent:
         self.policy_clip = policy_clip
         self.n_epochs = n_epochs
         self.gae_lambda = gae_lambda
-        # 实例化策略网络
+        # 实例化策略网络（状态动作值函数Qs,a）
         self.actor = ActorNetwork(n_actions, input_dims, alpha)
-        # 实例化价值网络
+        # 实例化评价网络（状态值函数Vs）
         self.critic = CriticNetwork(input_dims, alpha)
         # 实例化经验池
         self.memory = PPOMemory(batch_size)
@@ -209,10 +209,10 @@ class Agent:
         probs = torch.squeeze(dist.log_prob(action))
         # 求解action中多维值的联合概率密度（条件概率求积）
         # 将action中多维值 的概率密度 求积，得到action的多值联合概率密度，在求log，等效于对概率密度的log值求和
-        probs = torch.sum(probs).numpy()
+        probs = torch.sum(probs).cpu().numpy()
 
-        action = torch.squeeze(action).numpy()
-        value = torch.squeeze(value).numpy()
+        action = torch.squeeze(action).cpu().numpy()
+        value = torch.squeeze(value).cpu().numpy()
 
         # 此处不转换输出值到外部值域，因为后面还需要用此值计算新策略的期望
         # 将action服从Beta分布的值 从 [0,1] 映射到 [-1,1]
